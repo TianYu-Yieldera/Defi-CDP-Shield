@@ -6,7 +6,7 @@ import type { VoiceAlert, SupportedLanguage, AlertLevel } from '@/services/voice
 // 响应模板类型
 type TemplateFunction<T> = (data: T, language: SupportedLanguage) => string;
 
-// 风险分析响应
+// 风险分析响应 — 包含每个仓位的详细风险信息
 export const checkRiskResponse: TemplateFunction<CDPPosition[]> = (positions, language) => {
   if (positions.length === 0) {
     return language === 'zh'
@@ -25,45 +25,49 @@ export const checkRiskResponse: TemplateFunction<CDPPosition[]> = (positions, la
 
     if (criticalPositions.length > 0) {
       response += `其中 ${criticalPositions.length} 个仓位面临紧急清算风险，请立即处理！`;
-      criticalPositions.forEach(p => {
-        response += ` ${p.protocol} 仓位健康因子仅为 ${p.healthFactor.toFixed(2)}。`;
-      });
     }
-
     if (warningPositions.length > 0) {
-      response += `${warningPositions.length} 个仓位处于警告区间，建议关注。`;
+      response += `${warningPositions.length} 个仓位处于警告区间。`;
     }
-
     if (cautionPositions.length > 0) {
       response += `${cautionPositions.length} 个仓位需要注意。`;
     }
-
     if (safePositions.length > 0 && criticalPositions.length === 0 && warningPositions.length === 0) {
-      response += '所有仓位状态健康。';
+      response += '整体风险可控。';
     }
+
+    // 逐个列出仓位详情
+    positions.forEach(p => {
+      const status = getHealthStatus(p.healthFactor, 'zh');
+      response += ` ${p.protocol}：抵押 ${p.collateralAmount.toFixed(2)} ${p.collateralToken}，`;
+      response += `借入 ${p.borrowedAmount.toFixed(2)} ${p.borrowedToken}，`;
+      response += `健康因子 ${p.healthFactor.toFixed(2)}，${status}。`;
+    });
 
     return response;
   } else {
     let response = `You have ${count} active position${count > 1 ? 's' : ''}.`;
 
     if (criticalPositions.length > 0) {
-      response += ` ${criticalPositions.length} position${criticalPositions.length > 1 ? 's are' : ' is'} at critical liquidation risk! Please take action immediately!`;
-      criticalPositions.forEach(p => {
-        response += ` ${p.protocol} health factor is only ${p.healthFactor.toFixed(2)}.`;
-      });
+      response += ` ${criticalPositions.length} at critical liquidation risk!`;
     }
-
     if (warningPositions.length > 0) {
-      response += ` ${warningPositions.length} position${warningPositions.length > 1 ? 's are' : ' is'} in warning zone.`;
+      response += ` ${warningPositions.length} in warning zone.`;
     }
-
     if (cautionPositions.length > 0) {
-      response += ` ${cautionPositions.length} position${cautionPositions.length > 1 ? 's need' : ' needs'} attention.`;
+      response += ` ${cautionPositions.length} need${cautionPositions.length > 1 ? '' : 's'} attention.`;
+    }
+    if (safePositions.length > 0 && criticalPositions.length === 0 && warningPositions.length === 0) {
+      response += ' Overall risk is manageable.';
     }
 
-    if (safePositions.length > 0 && criticalPositions.length === 0 && warningPositions.length === 0) {
-      response += ' All positions are healthy.';
-    }
+    // List each position
+    positions.forEach(p => {
+      const status = getHealthStatus(p.healthFactor, 'en');
+      response += ` ${p.protocol}: collateral ${p.collateralAmount.toFixed(2)} ${p.collateralToken},`;
+      response += ` borrowed ${p.borrowedAmount.toFixed(2)} ${p.borrowedToken},`;
+      response += ` health factor ${p.healthFactor.toFixed(2)}, ${status}.`;
+    });
 
     return response;
   }

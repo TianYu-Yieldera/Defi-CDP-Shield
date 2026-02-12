@@ -28,6 +28,7 @@ export class SpeechRecognizer {
   private isListening = false;
   private timeoutId: NodeJS.Timeout | null = null;
   private callbacks: RecognizerCallbacks = {};
+  private lastInterimResult: RecognitionResult | null = null;
   private pendingPromise: {
     resolve: (result: RecognitionResult) => void;
     reject: (error: VoiceError) => void;
@@ -84,12 +85,16 @@ export class SpeechRecognizer {
         language,
       };
 
+      // 保存最新的识别结果（无论是否 final）
+      this.lastInterimResult = recognitionResult;
+
       // 始终调用外部回调
       this.callbacks.onResult?.(recognitionResult);
 
       // 如果是最终结果，resolve pending promise
       if (isFinal) {
         this.clearTimeout();
+        this.lastInterimResult = null;
         if (this.pendingPromise) {
           this.pendingPromise.resolve(recognitionResult);
           this.pendingPromise = null;
@@ -100,6 +105,28 @@ export class SpeechRecognizer {
     this.recognition.onend = () => {
       this.isListening = false;
       this.clearTimeout();
+
+      // 如果 onend 触发时 promise 还没 resolve，用最后的 interim 结果 resolve
+      if (this.pendingPromise) {
+        if (this.lastInterimResult && this.lastInterimResult.transcript) {
+          // 将最后的 interim 结果作为 final 结果返回
+          const finalResult: RecognitionResult = {
+            ...this.lastInterimResult,
+            isFinal: true,
+          };
+          this.pendingPromise.resolve(finalResult);
+        } else {
+          this.pendingPromise.resolve({
+            transcript: '',
+            confidence: 0,
+            isFinal: true,
+            language: 'zh',
+          });
+        }
+        this.pendingPromise = null;
+      }
+
+      this.lastInterimResult = null;
       this.callbacks.onEnd?.();
     };
 
@@ -240,12 +267,27 @@ export class SpeechRecognizer {
   // 停止识别
   stop(): void {
     this.clearTimeout();
-    if (this.recognition && this.isListening) {
+    const wasListening = this.isListening;
+    if (this.recognition && wasListening) {
       try {
         this.recognition.stop();
       } catch (error) {
         console.warn('Error stopping recognition:', error);
       }
+
+      // 安全机制：如果 onend 2 秒内未触发（Chrome 网络问题时可能卡死），
+      // 强制 resolve pending promise 并触发 onEnd 回调
+      setTimeout(() => {
+        if (this.pendingPromise) {
+          const fallback: RecognitionResult = this.lastInterimResult
+            ? { ...this.lastInterimResult, isFinal: true }
+            : { transcript: '', confidence: 0, isFinal: true, language: 'zh' };
+          this.pendingPromise.resolve(fallback);
+          this.pendingPromise = null;
+          this.lastInterimResult = null;
+          this.callbacks.onEnd?.();
+        }
+      }, 2000);
     }
     this.isListening = false;
   }

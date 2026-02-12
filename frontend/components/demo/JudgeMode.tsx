@@ -26,8 +26,12 @@ import {
   FileText,
   Award,
 } from 'lucide-react';
-import { DemoScenarioRunner } from './DemoScenarioRunner';
+import { DemoGuide } from './DemoGuide';
+import { DemoEmergencyPanel } from './DemoEmergencyPanel';
 import { useVoice } from '@/hooks/useVoice';
+import { getVoiceService } from '@/services/voice/VoiceService';
+import { getAlertMonitor } from '@/services/voice/AlertMonitor';
+import { useVoiceStore } from '@/store/voiceStore';
 import { usePWA } from '@/hooks/usePWA';
 import { useWakeLock } from '@/hooks/useWakeLock';
 import { useVibration } from '@/hooks/useVibration';
@@ -48,7 +52,13 @@ interface JudgeModeProps {
 
 export function JudgeMode({ language = 'en' }: JudgeModeProps) {
   const [currentLanguage, setCurrentLanguage] = useState(language);
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('guide');
+
+  // Sync language to voiceStore and AlertMonitor when it changes
+  useEffect(() => {
+    useVoiceStore.getState().setLanguage(currentLanguage);
+    getAlertMonitor().setLanguage(currentLanguage);
+  }, [currentLanguage]);
 
   const { isSupported: voiceSupported, startListening, isListening } = useVoice();
   const { isInstallable, isOnline, promptInstall } = usePWA();
@@ -199,20 +209,25 @@ export function JudgeMode({ language = 'en' }: JudgeModeProps) {
 
         {/* Main Content */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid grid-cols-4 w-full max-w-md mx-auto">
+          <TabsList className="grid grid-cols-4 w-full max-w-lg mx-auto">
+            <TabsTrigger value="guide">
+              {currentLanguage === 'zh' ? '指南' : 'Guide'}
+            </TabsTrigger>
             <TabsTrigger value="overview">
               {currentLanguage === 'zh' ? '概览' : 'Overview'}
             </TabsTrigger>
             <TabsTrigger value="demo">
               {currentLanguage === 'zh' ? '演示' : 'Demo'}
             </TabsTrigger>
-            <TabsTrigger value="features">
-              {currentLanguage === 'zh' ? '功能' : 'Features'}
-            </TabsTrigger>
             <TabsTrigger value="tech">
               {currentLanguage === 'zh' ? '技术' : 'Tech'}
             </TabsTrigger>
           </TabsList>
+
+          {/* Guide Tab */}
+          <TabsContent value="guide" className="space-y-4">
+            <DemoGuide language={currentLanguage} />
+          </TabsContent>
 
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-6">
@@ -252,6 +267,19 @@ export function JudgeMode({ language = 'en' }: JudgeModeProps) {
                     <Volume2 className="h-4 w-4 mr-2" />
                     {currentLanguage === 'zh' ? '语音播报' : 'Voice Output'}
                   </Button>
+                  <Button variant="outline" onClick={() => {
+                    // 模拟语音命令：跳过麦克风识别，直接处理"查看风险"命令
+                    const voiceService = getVoiceService();
+                    const cmd = currentLanguage === 'zh' ? '查看风险' : 'check risk';
+                    const processor = voiceService.getCommandProcessor();
+                    const generator = voiceService.getResponseGenerator();
+                    const result = processor.process(cmd);
+                    const response = generator.generate(result);
+                    voiceService.speak(response, currentLanguage);
+                  }}>
+                    <Shield className="h-4 w-4 mr-2" />
+                    {currentLanguage === 'zh' ? '模拟查看风险' : 'Simulate Check Risk'}
+                  </Button>
                   <Button variant="outline" onClick={() => playSound.warning()}>
                     <Bell className="h-4 w-4 mr-2" />
                     {currentLanguage === 'zh' ? '警报音效' : 'Alert Sound'}
@@ -267,46 +295,7 @@ export function JudgeMode({ language = 'en' }: JudgeModeProps) {
 
           {/* Demo Tab */}
           <TabsContent value="demo" className="flex justify-center">
-            <DemoScenarioRunner language={currentLanguage} />
-          </TabsContent>
-
-          {/* Features Tab */}
-          <TabsContent value="features" className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {features.map((feature) => (
-                <Card key={feature.id}>
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        {feature.icon}
-                        <CardTitle className="text-base">
-                          {currentLanguage === 'zh' ? feature.nameCN : feature.name}
-                        </CardTitle>
-                      </div>
-                      <Badge variant={feature.supported ? 'default' : 'secondary'}>
-                        {feature.supported ? (
-                          <Check className="h-3 w-3" />
-                        ) : (
-                          <X className="h-3 w-3" />
-                        )}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <p className="text-sm text-muted-foreground">{feature.description}</p>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => testFeature(feature.id)}
-                      disabled={!feature.supported}
-                    >
-                      {currentLanguage === 'zh' ? '测试' : 'Test'}
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+            <DemoEmergencyPanel language={currentLanguage} />
           </TabsContent>
 
           {/* Tech Tab */}
@@ -420,7 +409,7 @@ export function JudgeMode({ language = 'en' }: JudgeModeProps) {
         <div className="text-center text-sm text-muted-foreground pt-8">
           <div className="flex items-center justify-center gap-2">
             <Award className="h-4 w-4" />
-            <span>Built for BASE Hackathon 2024</span>
+            <span>Built for BASE Hackathon 2026</span>
           </div>
         </div>
       </div>

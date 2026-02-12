@@ -129,9 +129,16 @@ export class VoiceService {
   async startListening(): Promise<void> {
     const store = useVoiceStore.getState();
 
+    // 调试：标记 startListening 被调用
+    store.setStatus('processing');
+
     if (!this.isInitialized) {
       const initialized = await this.initialize();
-      if (!initialized) return;
+      if (!initialized) {
+        store.setStatus('idle');
+        store.setError({ code: 'init_failed', message: 'VoiceService initialization failed' });
+        return;
+      }
     }
 
     if (store.isListening) {
@@ -142,6 +149,16 @@ export class VoiceService {
     // 停止当前播报
     if (store.isSpeaking) {
       this.stopSpeaking();
+    }
+
+    // Chrome 要求 speechSynthesis.speak() 在用户手势上下文内调用
+    // 语音识别需要几秒钟，用户手势会过期，导致后续 TTS 被静默拒绝
+    // 解决方案：在用户点击时用一个静音 utterance "解锁" SpeechSynthesis
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      const primer = new SpeechSynthesisUtterance(' ');
+      primer.volume = 0.01;
+      primer.rate = 10;
+      speechSynthesis.speak(primer);
     }
 
     // 清除之前的状态
@@ -158,10 +175,35 @@ export class VoiceService {
 
       if (result.isFinal && result.transcript) {
         await this.processCommand(result.transcript, result.language);
+      } else {
+        // 识别结束但没有获得文本 — 给用户反馈
+        this.playSound('stop');
+        const language = useVoiceStore.getState().language || 'zh';
+        const noSpeechMsg = this.responseGenerator.generateError('no_speech_detected', language);
+        store.setResponse(noSpeechMsg);
+        store.setStatus('idle');
       }
-    } catch (error) {
-      console.error('Recognition error:', error);
-      // 错误已通过回调处理
+    } catch (error: unknown) {
+      // 将错误存入 store 以便调试
+      const voiceError = error as VoiceError;
+      store.setError(voiceError?.code
+        ? voiceError
+        : { code: 'unknown_error', message: String(error) }
+      );
+
+      // 确保退出 listening 状态（onend 可能未触发，如网络问题导致 Chrome 卡死）
+      if (useVoiceStore.getState().isListening) {
+        store.setListening(false);
+      }
+
+      // 生成用户可见的错误反馈
+      const language = useVoiceStore.getState().language || 'zh';
+      const errorCode = voiceError?.code || 'recognition_error';
+      const errorMsg = this.responseGenerator.generateError(errorCode, language);
+      store.setResponse(errorMsg);
+
+      this.playSound('stop');
+      console.warn('Recognition error:', voiceError?.message || error);
     }
   }
 
@@ -183,8 +225,41 @@ export class VoiceService {
     const response = this.responseGenerator.generate(commandResult);
     store.setResponse(response);
 
-    // 语音播报
-    await this.speak(response, language);
+    // 语音播报 — 识别后直接用原生 API，避免 cancel() 重置用户激活状态
+    this.speakDirect(response, language);
+  }
+
+  // 直接播报（不调用 cancel，用于识别后的响应）
+  private speakDirect(text: string, language: SupportedLanguage): void {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+
+    const store = useVoiceStore.getState();
+    const langCode = language === 'zh' ? 'zh-CN' : 'en-US';
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = langCode;
+    // 略慢的语速 + 微调音高 → 更自然的听感
+    utterance.rate = language === 'zh' ? 0.92 : 0.95;
+    utterance.pitch = 1.05;
+    utterance.volume = 1.0;
+
+    // 使用 synthesizer 缓存的最优语音（按质量评分选择）
+    const voice = this.synthesizer.getVoice(language);
+    if (voice) {
+      utterance.voice = voice;
+    }
+
+    utterance.onstart = () => {
+      store.setSpeaking(true);
+    };
+    utterance.onend = () => {
+      store.setSpeaking(false);
+    };
+    utterance.onerror = () => {
+      store.setSpeaking(false);
+    };
+
+    speechSynthesis.speak(utterance);
   }
 
   // 语音播报
@@ -199,7 +274,7 @@ export class VoiceService {
     try {
       await this.synthesizer.speak(text, language);
     } catch (error) {
-      console.error('Speech synthesis error:', error);
+      console.warn('Speech synthesis error:', error);
     }
   }
 

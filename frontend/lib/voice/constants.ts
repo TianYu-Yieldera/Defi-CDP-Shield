@@ -11,8 +11,8 @@ export const DEFAULT_VOICE_CONFIG: VoiceConfig = {
     lang: 'zh-CN', // 默认中文，会自动检测
   },
   synthesis: {
-    rate: 1.0,
-    pitch: 1.0,
+    rate: 0.93,
+    pitch: 1.05,
     volume: 1.0,
   },
   alert: {
@@ -25,8 +25,8 @@ export const DEFAULT_VOICE_CONFIG: VoiceConfig = {
   },
 };
 
-// 语音识别超时时间 (毫秒)
-export const RECOGNITION_TIMEOUT = 10000;
+// 语音识别超时时间 (毫秒) — VPN 环境下需要更长时间
+export const RECOGNITION_TIMEOUT = 30000;
 
 // 语音合成最大文本长度
 export const MAX_SYNTHESIS_TEXT_LENGTH = 500;

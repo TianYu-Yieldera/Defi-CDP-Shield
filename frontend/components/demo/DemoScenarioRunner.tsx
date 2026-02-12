@@ -218,6 +218,8 @@ export function DemoScenarioRunner({
   const [progress, setProgress] = useState(0);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const isRunningRef = useRef(false);
+  const isPausedRef = useRef(false);
   const voiceService = getVoiceService();
 
   // 清理定时器
@@ -278,30 +280,35 @@ export function DemoScenarioRunner({
     setSelectedScenario(scenario);
     setIsRunning(true);
     setIsPaused(false);
+    isRunningRef.current = true;
+    isPausedRef.current = false;
     setCurrentStepIndex(0);
 
     for (let i = 0; i < scenario.steps.length; i++) {
-      if (!isRunning) break;
+      if (!isRunningRef.current) break;
 
-      while (isPaused) {
+      while (isPausedRef.current) {
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
 
       await runStep(scenario.steps[i], i);
     }
 
+    isRunningRef.current = false;
     setIsRunning(false);
     setCurrentStepIndex(-1);
     onComplete?.();
-  }, [runStep, isRunning, isPaused, onComplete]);
+  }, [runStep, onComplete]);
 
   // 暂停/继续
   const togglePause = useCallback(() => {
-    setIsPaused(!isPaused);
-    if (isPaused) {
+    const newPaused = !isPausedRef.current;
+    isPausedRef.current = newPaused;
+    setIsPaused(newPaused);
+    if (newPaused) {
       voiceService.stopSpeaking();
     }
-  }, [isPaused, voiceService]);
+  }, [voiceService]);
 
   // 跳过当前步骤
   const skipStep = useCallback(() => {
@@ -313,6 +320,8 @@ export function DemoScenarioRunner({
 
   // 停止演示
   const stopDemo = useCallback(() => {
+    isRunningRef.current = false;
+    isPausedRef.current = false;
     setIsRunning(false);
     setIsPaused(false);
     setCurrentStepIndex(-1);

@@ -2,6 +2,7 @@
 
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
+import { useShallow } from 'zustand/react/shallow';
 import type {
   VoiceStore,
   VoiceStatus,
@@ -49,7 +50,7 @@ const initialState = {
   response: '',
   alerts: [] as VoiceAlert[],
   lastError: null as VoiceError | null,
-  language: 'zh' as SupportedLanguage,
+  language: 'en' as SupportedLanguage,
   settings: defaultSettings,
 };
 
@@ -215,7 +216,7 @@ export const useVoiceSpeaking = () => useVoiceStore((state) => state.isSpeaking)
 export const useVoiceTranscript = () => useVoiceStore((state) => state.transcript);
 export const useVoiceInterimTranscript = () => useVoiceStore((state) => state.interimTranscript);
 export const useVoiceResponse = () => useVoiceStore((state) => state.response);
-export const useVoiceAlerts = () => useVoiceStore((state) => state.alerts.filter((a) => !a.dismissed));
+export const useVoiceAlerts = () => useVoiceStore(useShallow((state) => state.alerts.filter((a) => !a.dismissed)));
 export const useVoiceError = () => useVoiceStore((state) => state.lastError);
 export const useVoiceLanguage = () => useVoiceStore((state) => state.language);
 export const useVoiceSupported = () => useVoiceStore((state) => state.isSupported);

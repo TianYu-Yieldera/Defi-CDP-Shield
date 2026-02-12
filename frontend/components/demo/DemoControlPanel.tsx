@@ -3,7 +3,7 @@
 
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
@@ -29,6 +29,7 @@ import { useVoiceStore } from '@/store/voiceStore';
 import { getVoiceService } from '@/services/voice/VoiceService';
 import { triggerVibration } from '@/hooks/useVibration';
 import { playSound } from '@/services/voice/SoundGenerator';
+import { alertBroadcastTemplate } from '@/lib/voice/templates';
 
 interface DemoScenario {
   id: string;
@@ -54,7 +55,8 @@ export function DemoControlPanel() {
   const [autoMode, setAutoMode] = useState(false);
 
   const cdpStore = useCDPStore();
-  const voiceStore = useVoiceStore();
+  const currentLanguage = useVoiceStore((state) => state.language);
+  const lastAlertTime = useRef(0);
 
   // 模拟价格变化
   const simulatePriceChange = useCallback((changePercent: number) => {
@@ -80,15 +82,35 @@ export function DemoControlPanel() {
     }
     setHealthFactor(newHF);
 
-    // 触发警报
-    if (newHF < 1.3) {
+    // 触发警报（阈值与 AlertMonitor 一致）
+    const now = Date.now();
+    const alertCooldown = 5000; // 滑块操作冷却 5 秒，避免拖动时反复播报
+
+    if (newHF < 1.1) {
       playSound.critical();
       triggerVibration('critical');
+      if (positions.length > 0 && now - lastAlertTime.current > alertCooldown) {
+        lastAlertTime.current = now;
+        const position = { ...positions[0], healthFactor: newHF };
+        const message = alertBroadcastTemplate(position, 'critical', currentLanguage);
+        const voiceService = getVoiceService();
+        voiceService.speak(message, currentLanguage);
+      }
+    } else if (newHF < 1.3) {
+      playSound.warning();
+      triggerVibration('warning');
+      if (positions.length > 0 && now - lastAlertTime.current > alertCooldown) {
+        lastAlertTime.current = now;
+        const position = { ...positions[0], healthFactor: newHF };
+        const message = alertBroadcastTemplate(position, 'warning', currentLanguage);
+        const voiceService = getVoiceService();
+        voiceService.speak(message, currentLanguage);
+      }
     } else if (newHF < 1.5) {
       playSound.warning();
       triggerVibration('warning');
     }
-  }, [cdpStore]);
+  }, [cdpStore, currentLanguage]);
 
   // 触发紧急警报
   const triggerCriticalAlert = useCallback(() => {

@@ -14,7 +14,7 @@ export class AlertMonitor {
   private cooldownMap: Map<string, number> = new Map();
   private unsubscribe: (() => void) | null = null;
   private isRunning = false;
-  private language: SupportedLanguage = 'zh';
+  private language: SupportedLanguage = 'en';
 
   private constructor() {}
 
