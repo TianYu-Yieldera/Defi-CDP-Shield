@@ -11,6 +11,8 @@
     "MockDEXAggregator": "0x73912D548B81a7c8a12953eFDA8dF9af4F9f851d",
     "MockAavePool": "0xdF47B2cb7d2a224E3701bEDbe1Cf00D9085e7191",
     "CDPShield": "0xe2E8d33CB59CfCA118EF5F44A24764e7b88A4534",
-    "FlashLoanReceiver": "0xDd02C2734410bbc865Fc28715a0F0755416E18d7"
-  }
+    "FlashLoanReceiver": "0xDd02C2734410bbc865Fc28715a0F0755416E18d7",
+    "DEXAggregator": "0x9099f10611807D3Be5cd901BaAc42AEF7A4a3658"
+  },
+  "dexAggregatorDeployedAt": "2025-12-12T12:30:00.000Z"
 }
